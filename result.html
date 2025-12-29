@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>IT Department Grade Sheet</title>
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #f0f4f7; padding: 30px; }
+    h2 { text-align: center; color: #1a73e8; }
+    .form-container { text-align: center; margin-bottom: 20px; }
+    input, select, button { padding: 8px 12px; margin: 5px; border-radius: 4px; border: 1px solid #ccc; font-size: 14px; }
+    button { background-color: #1a73e8; color: white; border: none; cursor: pointer; }
+    button:hover { background-color: #155ab6; }
+    #output { width: 80%; margin: 0 auto; background-color: white; padding: 20px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #333; padding: 8px; text-align: center; }
+    th { background-color: #1a73e8; color: white; }
+    .fail { color: red; font-weight: bold; }
+    .pass { color: green; font-weight: bold; }
+    .error { color: red; font-weight: bold; text-align: center; }
+  </style>
+</head>
+<body>
+
+<h2>IT Department – Student Grade Sheet</h2>
+
+<div class="form-container">
+  <input type="text" id="roll" placeholder="Enter Roll No">
+  <select id="sem">
+    <option value="">Select Semester</option>
+    <option value="1">Semester 1</option>
+    <option value="2">Semester 2</option>
+    <option value="3">Semester 3</option>
+    <option value="4">Semester 4</option>
+    <option value="5">Semester 5</option>
+    <option value="6">Semester 6</option>
+  </select>
+  <input type="text" id="dob" placeholder="Enter DOB (YYYY-MM-DD)">
+  <button onclick="viewResult()">View Result</button>
+</div>
+
+<div id="output"></div>
+
+<script>
+  // Replace these links with your published CSV links (specific sheet, format CSV)
+  const semLinks = {
+    "1": "https://docs.google.com/spreadsheets/d/e/2PACX-1vS43YQ8vjjx2k0tz4-CdIPfiLSIl81gAL4m5UypknPsQLf6tKU5Z8f9tZnS0IW5XgxLcBQ8yf9MJpy8/pubhtml",
+    "2": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSBpwCaJSk1JijgGIUjbrF0miV9TSN0FQPZQZpl_MTOGU6CLRsVvk8Sugtyfwu8ubFq7tjUTRqyPzrC/pubhtml",
+    "3": "https://docs.google.com/spreadsheets/d/e/2PACX-1vTG89C6VTFKsaFAmSjLSVcX16PAiuiKNCWSX_OKlP1RtceW95EFjNr3ZTRF98n7qlKHk1TYh8RLLBSX/pubhtml",
+    "4": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSX_oUDukOpyKfD9iL_0zcW9wZjrS4TzHfCxqH-QoUE_Y08eE4KCHTRmL7eepMUZvD4SOhanggjNhFd/pubhtml",
+    "5": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSeFFXzuMhIBlkdpm8P_FM3cXi-N9RJqayytxMUw-b5DiJoom0PkbLVM9KhRwrYOa7IndcxGA_55xKb/pubhtml",
+    "6": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSFkL1L6a8QqSxcDNcZ530-G8r2v4L-HjZWuj-enjyLD6a66ciconE1OdnrNJl_wzjeJJBJ1Kii-8dM/pubhtml"
+  };
+
+  // Robust CSV parser that handles quoted fields and commas inside quotes
+  function parseCSV(text) {
+    const rows = [];
+    let i = 0;
+    const len = text.length;
+    while (i < len) {
+      const row = [];
+      let field = '';
+      let inQuotes = false;
+      while (i < len) {
+        const ch = text[i];
+        if (inQuotes) {
+          if (ch === '"') {
+            if (text[i+1] === '"') { field += '"'; i += 2; continue; }
+            inQuotes = false; i++; continue;
+          }
+          field += ch; i++; continue;
+        }
+        if (ch === '"') { inQuotes = true; i++; continue; }
+        if (ch === ',') { row.push(field); field = ''; i++; continue; }
+        if (ch === '\r') { i++; continue; }
+        if (ch === '\n') { row.push(field); i++; break; }
+        field += ch; i++;
+      }
+      if (i >= len) row.push(field);
+      rows.push(row);
+    }
+    return rows.filter(r => r.some(cell => (cell||'').toString().trim()));
+  }
+
+  function viewResult() {
+    const roll = document.getElementById("roll").value.trim();
+    const sem = document.getElementById("sem").value;
+    const dobInput = document.getElementById("dob").value.trim();
+
+    if (!roll || !sem || !dobInput) {
+      document.getElementById("output").innerHTML = "<p class='error'>Please enter all details</p>";
+      return;
+    }
+
+    const sheetURL = semLinks[sem];
+    if (!sheetURL) {
+      document.getElementById("output").innerHTML = "<p class='error'>CSV link for this semester not set</p>";
+      return;
+    }
+
+    // Normalize to a CSV export URL (handles /pubhtml and /spreadsheets/d/e/... links)
+    function normalizeSheetUrl(url) {
+      try {
+        const u = new URL(url);
+        if (!u.hostname.includes('docs.google.com')) return url;
+        // If it's already an export or pub CSV link, return as-is
+        if (u.pathname.includes('/export') || u.searchParams.get('format') === 'csv' || u.searchParams.get('output') === 'csv') return url;
+        // handle /spreadsheets/d/e/<id>
+        let m = u.pathname.match(/\/spreadsheets\/d\/e\/([a-zA-Z0-9-_]+)/);
+        if (m && m[1]) return `https://docs.google.com/spreadsheets/d/e/${m[1]}/pub?output=csv&gid=${u.searchParams.get('gid')||0}`;
+        // handle /spreadsheets/d/<id>
+        m = u.pathname.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+        if (m && m[1]) return `https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv&gid=${u.searchParams.get('gid')||0}`;
+        // handle pubhtml -> pub?output=csv
+        if (url.includes('/pubhtml')) return url.replace(/\/pubhtml.*$/, '/pub?output=csv');
+        if (url.includes('/pub')) return url.replace(/\/pub.*$/, '/pub?output=csv');
+        return url;
+      } catch (e) { return url; }
+    }
+
+    const fetchUrl = normalizeSheetUrl(sheetURL);
+
+    fetch(fetchUrl)
+      .then(res => {
+        if (!res.ok) throw new Error('Network response was not ok: ' + res.status);
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        return res.text().then(text => ({ text, ct }));
+      })
+      .then(({ text: data, ct }) => {
+        if (ct.includes('text/html') || data.trim().startsWith('<')) {
+          document.getElementById("output").innerHTML = "<p class='error'>Fetched content looks like HTML, not CSV. Make sure the sheet is published and you are using a CSV export link (pub?output=csv or export?format=csv).</p>";
+          document.getElementById('output').innerHTML += `<div style="margin-top:8px;color:#555">Tried URL: ${fetchUrl}</div>`;
+          return;
+        }
+
+        const rows = parseCSV(data);
+        if (rows.length === 0) {
+          document.getElementById("output").innerHTML = "<p class='error'>No data found in the sheet</p>";
+          return;
+        }
+
+        // Assuming header row exists
+        const headers = rows[0];
+        const parsedRows = rows.slice(1);
+
+        const matched = parsedRows.filter(r => r[0] === roll && r[2] === sem && r[3] === dobInput);
+        if (matched.length === 0) {
+          document.getElementById("output").innerHTML = "<p class='error'>Invalid details or result not published</p>";
+          let sampleHtml = '<div style="font-weight:bold;margin-bottom:6px">Sample first rows:</div>';
+          sampleHtml += '<table style="width:100%;border-collapse:collapse"><tr style="background:#f1f1f1"><th style="border:1px solid #ddd;padding:6px">#</th>';
+          const maxCols = Math.max(...parsedRows.slice(0,5).map(r=>r.length));
+          for (let ci=0; ci<maxCols; ci++) sampleHtml += `<th style="border:1px solid #ddd;padding:6px">col ${ci}</th>`;
+          sampleHtml += '</tr>';
+          parsedRows.slice(0,5).forEach((r, idx) => {
+            sampleHtml += `<tr><td style="border:1px solid #ddd;padding:6px">${idx}</td>`;
+            for (let ci=0; ci<maxCols; ci++) sampleHtml += `<td style="border:1px solid #ddd;padding:6px">${(r[ci]||'').replace(/</g,'&lt;')}</td>`;
+            sampleHtml += '</tr>';
+          });
+          sampleHtml += '</table>';
+          document.getElementById('output').innerHTML += sampleHtml;
+          return;
+        }
+
+        const row = matched[0];
+        const name = row[1];
+        const formattedDOB = row[3].split("-").reverse().join("/");
+
+        let html = `<h3>Name: ${name}</h3>`;
+        html += `<h4>Roll No: ${roll} | Semester: ${sem} | DOB: ${formattedDOB}</h4>`;
+        html += `<table><tr><th>Subject</th><th>Marks (20)</th><th>Status</th></tr>`;
+
+        let total = 0;
+        for (let i = 4; i < row.length; i++) {
+          const marks = parseInt(row[i]) || 0;
+          const status = marks >= 8 ? "Pass" : "Fail";
+          const cls = marks >= 8 ? "pass" : "fail";
+          html += `<tr class="${cls}"><td>${headers[i]}</td><td>${marks}</td><td>${status}</td></tr>`;
+          total += marks;
+        }
+
+        html += `<tr><th>Total</th><th>${total}</th><th></th></tr></table>`;
+        document.getElementById("output").innerHTML = html;
+      })
+      .catch(err => {
+        document.getElementById("output").innerHTML = "<p class='error'>Error loading results. Check CSV URL and CORS.</p>";
+        console.error(err);
+      });
+  }
+</script>
+
+</body>
+</html>
