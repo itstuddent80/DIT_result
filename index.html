@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>IT Department Grade Sheet</title>
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root{
+      --primary: #1a73e8;
+      --accent: #ff7a59;
+      --success: #2e7d32;
+      --danger: #d32f2f;
+      --muted: #6b7280;
+      --card: #ffffff;
+      --glass: rgba(26,115,232,0.08);
+      --shadow: 0 6px 20px rgba(15,23,42,0.06);
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f0f4f7;
+      padding: 30px;
+      color: #333;
+    }
+
+    .header {
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:18px;
+      margin-bottom: 26px;
+      flex-wrap:wrap;
+    }
+
+    .brand-text{display:flex;flex-direction:column;align-items:center}
+
+    .header img {
+      max-width: 110px;
+      margin-bottom: 0;
+      border-radius:8px;
+      box-shadow:var(--shadow);
+    }
+
+    .header h1 i{margin-right:8px;color:var(--primary)}
+
+    button{box-shadow:0 8px 20px rgba(26,115,232,0.12)}
+
+    .status{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;color:#fff;font-weight:700}
+    .status.pass{background:var(--success)}
+    .status.fail{background:var(--danger)}
+
+    .icon-muted{color:var(--muted);margin-right:6px}
+
+    .table td .fa-check-circle{color:var(--success)}
+    .table td .fa-times-circle{color:var(--danger)}
+
+    .card-shadow{box-shadow:var(--shadow)}
+
+    /* preserve original header text styles */
+
+    .header h1 {
+      margin: 5px 0;
+      font-size: 28px;
+      color: var(--primary);
+    }
+
+    .header h2 {
+      margin: 5px 0;
+      font-size: 18px;
+      color: #555;
+    }
+
+    .header h3 {
+      margin: 3px 0 0 0;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .form-container {
+      text-align: center;
+      margin-bottom: 25px;
+    }
+
+    input, select, button {
+      padding: 10px 15px;
+      margin: 5px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+      outline: none;
+      transition: 0.3s;
+    }
+
+    input:focus, select:focus {
+      border-color: #1a73e8;
+      box-shadow: 0 0 5px rgba(26, 115, 232, 0.5);
+    }
+
+    button {
+      background: linear-gradient(90deg, #1a73e8, #155ab6);
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.3s;
+    }
+
+    button:hover {
+      background: linear-gradient(90deg, #155ab6, #0f3c80);
+    }
+
+    #output {
+      width: 90%;
+      margin: 20px auto;
+      background: #fff;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+    }
+
+    #output h3 {
+      color: #1a73e8;
+      margin-bottom: 5px;
+    }
+
+    #output h4 {
+      color: #555;
+      margin-bottom: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+      font-size: 14px;
+    }
+
+    th, td {
+      border: 1px solid #333;
+      padding: 12px;
+      text-align: center;
+    }
+
+    th {
+      background: linear-gradient(90deg, #1a73e8, #155ab6);
+      color: white;
+      font-size: 15px;
+    }
+
+    tr.pass {
+      background-color: #e6f7e6;
+      color: #2e7d32;
+      font-weight: bold;
+    }
+
+    tr.fail {
+      background-color: #fdecea;
+      color: #d32f2f;
+      font-weight: bold;
+    }
+
+    .error {
+      color: #d32f2f;
+      font-weight: bold;
+      text-align: center;
+      font-size: 16px;
+    }
+
+    td i {
+      margin-right: 5px;
+    }
+
+    @media screen and (max-width: 768px) {
+      #output { width: 100%; padding: 20px; }
+      input, select, button { width: 90%; margin: 8px 0; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <img src="download.jpeg" alt="MMP Logo">
+  <div class="brand-text">
+    <h1><i class="fas fa-school"></i> Manmohan Memorial Polytechnic</h1>
+    <h2>Department of Information Technology</h2>
+    <h3>1st Internal Assessment Results</h3>
+  </div>
+</div>
+
+<div class="form-container">
+  <input type="text" id="roll" placeholder="Enter Roll No">
+  <select id="sem">
+    <option value="">Select Semester</option>
+    <option value="1">Semester 1</option>
+    <option value="2">Semester 2</option>
+    <option value="3">Semester 3</option>
+    <option value="4">Semester 4</option>
+    <option value="5">Semester 5</option>
+    <option value="6">Semester 6</option>
+  </select>
+  <input type="text" id="dob" placeholder="Enter DOB (YYYY-MM-DD)">
+  <button onclick="viewResult()"><i class="fas fa-eye"></i> View Result</button>
+</div>
+
+<div id="output"></div>
+
+<script>
+  const API_URL = "https://script.google.com/macros/s/AKfycbyvu_zDHgUVGe3v0xVZwFU7bbO7G3lMqBVOCG0N0dqeyZNsdKcTmkt4wdp5HLOx7tSLEQ/exec";
+
+  async function viewResult() {
+    const roll = document.getElementById("roll").value.trim();
+    const sem = document.getElementById("sem").value;
+    const dobInput = document.getElementById("dob").value.trim();
+
+    if (!roll || !sem || !dobInput) {
+      document.getElementById("output").innerHTML = "<p class='error'><i class='fas fa-exclamation-circle'></i> Please enter Roll No, Semester, and DOB</p>";
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}?roll=${roll}&sem=${sem}&dob=${dobInput}`);
+      const data = await res.json();
+
+      if (data.error) {
+        document.getElementById("output").innerHTML = `<p class='error'><i class='fas fa-exclamation-circle'></i> ${data.error}</p>`;
+        return;
+      }
+
+      let dobDisplay = data.DOB;
+      if (dobDisplay) {
+        const d = new Date(dobDisplay);
+        dobDisplay = `${('0'+d.getDate()).slice(-2)}/${('0'+(d.getMonth()+1)).slice(-2)}/${d.getFullYear()}`;
+      }
+
+      let html = `<h3><i class="fas fa-user"></i> ${data.Name}</h3>`;
+      html += `<h4><i class="fas fa-id-badge"></i> Roll No: ${data["Roll No"]} | <i class="fas fa-calendar-alt"></i> Semester: ${data.Semester} | DOB: ${dobDisplay}</h4>`;
+
+      html += `<table><tr><th>Subject</th><th><i class="fas fa-pen"></i> Marks</th><th><i class="fas fa-chart-line"></i> Attendance</th><th><i class="fas fa-check-circle"></i> Status</th></tr>`;
+      let totalMarks = 0;
+      let totalAttendance = 0;
+      const subjects = Array.isArray(data.Subjects) ? data.Subjects : [];
+      let overallPass = true;
+      subjects.forEach(sub => {
+        const mark = Number(sub.mark) || 0;
+        const att = Number(sub.attendance) || 0;
+        const isPass = mark >= 8;
+        const cls = isPass ? "pass" : "fail";
+        if (!isPass) overallPass = false;
+        const statusHtml = isPass
+          ? `<span class="status pass"><i class="fas fa-check-circle"></i> Pass</span>`
+          : `<span class="status fail"><i class="fas fa-times-circle"></i> Fail</span>`;
+        html += `<tr class="${cls}"><td>${sub.name}</td><td>${mark}</td><td>${att}%</td><td>${statusHtml}</td></tr>`;
+        totalMarks += mark;
+        totalAttendance += att;
+      });
+      const avgAttendance = subjects.length ? (totalAttendance / subjects.length).toFixed(2) : '0.00';
+      const overallStatus = subjects.length ? (overallPass ? 'Pass' : 'Fail') : '-';
+      const overallCls = overallStatus === 'Pass' ? 'pass' : 'fail';
+      const overallHtml = overallStatus === '-' ? '-' : (overallStatus === 'Pass'
+        ? `<span class="status pass"><i class="fas fa-check-circle"></i> Pass</span>`
+        : `<span class="status fail"><i class="fas fa-times-circle"></i> Fail</span>`);
+      html += `<tr class="${overallCls}"><th>Total</th><th>${totalMarks}</th><th>${avgAttendance}%</th><th>${overallHtml}</th></tr></table>`;
+
+      document.getElementById("output").innerHTML = html;
+
+    } catch (err) {
+      console.error(err);
+      document.getElementById("output").innerHTML = "<p class='error'><i class='fas fa-exclamation-circle'></i> Error fetching results. Check the API URL and CORS settings.</p>";
+    }
+  }
+</script>
+
+</body>
+</html>
