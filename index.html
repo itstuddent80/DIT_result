@@ -40,7 +40,7 @@
 
 <script>
 // Inlined app.js — combined JS
-const API_URL = "https://script.google.com/macros/s/AKfycbz1Mu5rHvFvmqa_8hHplRrVLyVPe-Q_ezqwAjaaYkcfRsDqPD3d4HFsHAXXEVpKmA9Azg/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbyhrk8hZ4IMYnytXW1sSK5Xutnpc5sQ4YM2IE-Z4Is58AJt7FCGLfDUn19G8oiK6jxtDQ/exec";
 
 function setOutput(html) {
   const out = document.getElementById('output');
@@ -230,12 +230,16 @@ async function viewResult() {
     }
 
     // Prefer showing raw YYYY-MM-DD from the sheet; otherwise attempt to parse and normalize
+    // Also sanitize values like "2060-07-07 48" by extracting the first YYYY-MM-DD token
     let dobDisplay = '-';
     if (data.DOB) {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(data.DOB)) dobDisplay = data.DOB;
-      else {
-        const d = new Date(data.DOB);
-        dobDisplay = formatDisplayDate(d);
+      const s = String(data.DOB).trim();
+      const m = s.match(/(\d{4}-\d{2}-\d{2})/);
+      if (m) {
+        dobDisplay = m[1];
+      } else {
+        const d = new Date(s);
+        if (!isNaN(d)) dobDisplay = formatDisplayDate(d);
       }
     }
 
@@ -360,7 +364,43 @@ async function viewResult() {
       return;
     }
 
-    const subjects = Array.isArray(data.Subjects) ? data.Subjects : [];
+    let subjects = Array.isArray(data.Subjects) ? data.Subjects : [];
+
+    // Elective groups: each group contains mutually exclusive elective names (lowercased)
+    const electiveGroups = [ ['mis', 'data mining'] ];
+
+    electiveGroups.forEach(group => {
+      const groupRows = subjects.filter(s => group.includes(String(s.name || '').trim().toLowerCase()));
+      if (groupRows.length > 1) {
+        // Find any elective in the group that has both a valid numeric mark and attendance
+        const chosen = groupRows.filter(s => {
+          const rawMark = (s.mark === undefined || s.mark === null) ? '' : String(s.mark).trim();
+          const isDash = /^-+$/.test(rawMark);
+          const isNA = /^na$/i.test(rawMark);
+          const isAbsent = /^(abs|absent)$/i.test(rawMark) || isDash || isNA;
+          const markNum = isAbsent ? NaN : (rawMark === '' ? NaN : Number(rawMark));
+          const hasMark = !isAbsent && !isNaN(markNum);
+          const hasAttendance = s.attendance !== undefined && s.attendance !== null && String(s.attendance).trim() !== '';
+          return hasMark && hasAttendance;
+        });
+
+        if (chosen.length > 0) {
+          // Keep only electives in the group that have mark+attendance; drop others in the group
+          subjects = subjects.filter(s => {
+            if (!group.includes(String(s.name || '').trim().toLowerCase())) return true;
+            const rawMark = (s.mark === undefined || s.mark === null) ? '' : String(s.mark).trim();
+            const isDash = /^-+$/.test(rawMark);
+            const isNA = /^na$/i.test(rawMark);
+            const isAbsent = /^(abs|absent)$/i.test(rawMark) || isDash || isNA;
+            const markNum = isAbsent ? NaN : (rawMark === '' ? NaN : Number(rawMark));
+            const hasMark = !isAbsent && !isNaN(markNum);
+            const hasAttendance = s.attendance !== undefined && s.attendance !== null && String(s.attendance).trim() !== '';
+            return hasMark && hasAttendance;
+          });
+        }
+      }
+    });
+
     let totalObtained = 0;
     let totalAttendance = 0;
     let overallPass = true;
@@ -452,10 +492,10 @@ async function viewResult() {
           <tfoot>
             <tr class="summary-row">
               <th>Total</th>
-              <th class="center">${totalFull}</th>
-              <th class="center">${totalPassMarks}</th>
+              <th class="center"></th>
+              <th class="center"></th>
               <th>${totalObtainedDisplay}</th>
-              <th class="center">${avgAttendance}%</th>
+              <th class="center"></th>
               <th class="center">${overallHtml}</th>
             </tr>
           </tfoot>
