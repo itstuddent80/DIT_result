@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>IT Department Grade Sheet</title>
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- ✅ PRINT VISIBILITY CONTROL -->
+    <style>
+        /* ================= SCREEN ================= */
+
+        /* Hide college header on screen */
+        .result-header .college-left {
+            display: none;
+        }
+
+        /* Hide assessment title & generated date on screen */
+        .result-meta {
+            display: none;
+        }
+
+        /* ================= PRINT ================= */
+        @media print {
+
+            /* Show college header */
+            .result-header .college-left {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+
+            /* Show assessment title & generated date */
+            .result-meta {
+                display: block;
+                text-align: right;
+            }
+
+            /* Hide inputs & buttons */
+            .form-container,
+            .actions {
+                display: none;
+            }
+
+            body {
+                background: white;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- TOP BRAND HEADER (SCREEN ONLY) -->
+    <div class="header">
+        <img src="download.jpeg" alt="MMP Logo">
+        <div class="brand-text">
+            <h1 class="title">Manmohan Memorial Polytechnic</h1>
+            <h2>Department of Information Technology</h2>
+            <h3>1st Internal Assessment Results</h3>
+        </div>
+    </div>
+
+    <!-- SEARCH FORM -->
+    <div class="form-container">
+        <input type="text" id="roll" placeholder="Enter Roll No">
+        <select id="sem">
+            <option value="">Select Semester</option>
+            <option value="1">Semester 1</option>
+            <option value="2">Semester 2</option>
+            <option value="3">Semester 3</option>
+            <option value="4">Semester 4</option>
+            <option value="5">Semester 5</option>
+            <option value="6">Semester 6</option>
+        </select>
+        <input type="text" id="dob" placeholder="Enter DOB (YYYY-MM-DD)">
+        <button onclick="viewResult()">
+            <i class="fas fa-eye"></i> View Result
+        </button>
+    </div>
+
+    <!-- RESULT OUTPUT -->
+    <div id="output"></div>
+
+    <script>
+        const API_URL = "https://script.google.com/macros/s/AKfycbyvu_zDHgUVGe3v0xVZwFU7bbO7G3lMqBVOCG0N0dqeyZNsdKcTmkt4wdp5HLOx7tSLEQ/exec";
+
+        function setOutput(html) {
+            document.getElementById('output').innerHTML = html;
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, s => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[s]);
+        }
+
+        function formatDOBOnly(d) {
+            if (!d) return '-';
+            return String(d).split('T')[0];
+        }
+
+        function parseDOB(input) {
+            let m = input.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!m) return null;
+            let d = new Date(m[1], m[2] - 1, m[3]);
+            return isNaN(d) ? null : d;
+        }
+
+        async function viewResult() {
+            const roll = document.getElementById("roll").value.trim();
+            const sem = document.getElementById("sem").value;
+            const dobI = document.getElementById("dob").value.trim();
+
+            if (!roll || !sem || !dobI) {
+                setOutput("<p class='error'>Please fill all fields.</p>");
+                return;
+            }
+
+            const dob = parseDOB(dobI);
+            if (!dob) {
+                setOutput("<p class='error'>Invalid DOB format.</p>");
+                return;
+            }
+
+            const dobSend = dob.toISOString().slice(0, 10);
+            const url = `${API_URL}?roll=${encodeURIComponent(roll)}&sem=${encodeURIComponent(sem)}&dob=${encodeURIComponent(dobSend)}`;
+
+            setOutput("<p class='muted'>Loading results…</p>");
+
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (!data || data.error || !Array.isArray(data.Subjects)) {
+                    setOutput("<p class='error'>Record not found.</p>");
+                    return;
+                }
+
+                let totalMarks = 0;
+                let overallPass = true;
+
+                let html = `
+    <div class="result-card card-shadow">
+
+      <div class="result-header">
+        <div class="college-left">
+          <img src="download.jpeg" alt="Logo">
+          <div>
+            <div class="college-name">Manmohan Memorial Polytechnic</div>
+            <div class="dept">Department of Information Technology</div>
+          </div>
+        </div>
+
+        <div class="result-meta">
+          <div class="assessment-title">1st Internal Assessment</div>
+          <div class="small muted">Generated: ${new Date().toLocaleDateString()}</div>
+        </div>
+      </div>
+
+      <div class="student-info">
+        <div><b>Student Name:</b> ${escapeHtml(data.Name || '-')}</div>
+        <div><b>Roll No:</b> ${escapeHtml(data["Roll No"] || '-')}</div>
+        <div><b>Semester:</b> ${escapeHtml(data.Semester || '-')}</div>
+        <div><b>DOB:</b> ${escapeHtml(formatDOBOnly(data.DOB))}</div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="result-table">
+          <thead>
+            <tr>
+              <th>Subject</th>
+              <th class="center">Full Marks</th>
+              <th class="center">Pass Marks</th>
+              <th class="center">Obtained</th>
+              <th class="center">Attendance</th>
+              <th class="center">Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+                data.Subjects.forEach(sub => {
+                    const mark = Number(sub.mark) || 0;
+                    const att = Number(sub.attendance) || 0;
+                    const pass = mark >= 8;
+                    if (!pass) overallPass = false;
+                    totalMarks += mark;
+
+                    html += `
+        <tr class="${pass ? 'pass' : 'fail'}">
+          <td>${escapeHtml(sub.name)}</td>
+          <td class="center">20</td>
+          <td class="center">08</td>
+          <td class="center">${mark}</td>
+          <td class="center">${att}%</td>
+          <td class="center">
+            ${pass
+                            ? '<span class="status pass"><i class="fas fa-check-circle"></i> Pass</span>'
+                            : '<span class="status fail"><i class="fas fa-times-circle"></i> Fail</span>'
+                        }
+          </td>
+        </tr>
+      `;
+                });
+
+                html += `
+          </tbody>
+          <tfoot>
+            <tr class="summary-row">
+              <th>Total</th>
+              <th colspan="2"></th>
+              <th>${totalMarks}</th>
+              <th></th>
+              <th class="center">
+                ${overallPass
+                        ? '<span class="status pass"><i class="fas fa-check-circle"></i> Pass</span>'
+                        : '<span class="status fail"><i class="fas fa-times-circle"></i> Fail</span>'
+                    }
+              </th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div class="actions">
+        <button class="btn-print" onclick="window.print()">
+          <i class="fas fa-print"></i> Print
+        </button>
+      </div>
+
+    </div>
+    <div class="signatures">
+        <div class="signature">
+          <div class="sig-line"></div>
+          <div class="sig-title">Prepared By:</div>
+        </div>
+        <div class="signature">
+          <div class="sig-line"></div>
+          <div class="sig-title">Head of Department</div>
+        </div>
+      </div>
+    `;
+
+                setOutput(html);
+
+            } catch (e) {
+                setOutput("<p class='error'>Server error.</p>");
+            }
+        }
+    </script>
+
+</body>
+
+</html>
