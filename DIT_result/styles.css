@@ -470,19 +470,19 @@ tr.fail td.subject {
     background: white
   }
 
+  /* Show the institutional result header only on print */
+  .result-header {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: center;
+  }
+
   /* Hide top page header and form controls in print to keep only the result card */
   .header,
   .form-container,
   button,
   .actions .btn-print {
     display: none
-  }
-
-  /* Show the institutional result header only on print */
-  .result-header {
-    display: flex !important;
-    justify-content: space-between;
-    align-items: center;
   }
 
   .result-card {
