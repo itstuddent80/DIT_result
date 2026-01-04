@@ -36,6 +36,7 @@
 </div>
 
 <div id="output"></div>
+<pre id="debug" class="debug" style="display:none;white-space:pre-wrap;padding:8px;margin-top:12px;background:#f8f9fb;border-radius:4px;color:#222;font-size:13px;">Debug log:</pre>
 
 <script>
 // Inlined app.js — combined JS
@@ -51,25 +52,33 @@ function escapeHtml(str) {
 }
 
 function debugLog(msg) {
-  const dbg = document.getElementById('debug');
-  if (dbg) dbg.textContent += msg + "\n";
-  console.debug(msg);
+  const ts = new Date().toISOString().replace('T',' ').slice(0,19);
+  const line = `[${ts}] ${msg}`;
+  // Always log to console for developers
+  console.debug(line);
+  // Only show on-page when developer debugging is explicitly enabled
+  if (window.DEV_DEBUG) {
+    const dbg = document.getElementById('debug');
+    if (dbg) { dbg.style.display = 'block'; dbg.textContent += line + "\n"; }
+  }
 }
 
 // Global error handlers to show JS/runtime issues on the page for easier diagnosis
 window.addEventListener('error', e => {
-  const msg = `JS Error: ${e.message} at ${e.filename}:${e.lineno}:${e.colno}`;
-  debugLog(msg);
-  setOutput(`<p class='error'><i class='fas fa-exclamation-circle'></i> ${escapeHtml(msg)}</p>`);
-  console.error(e.error || e.message, e);
+  const userMsg = `JS Error: ${e.message}`;
+  debugLog(userMsg);
+  // Show a sanitized message to the user (do not expose file paths / line numbers)
+  setOutput(`<p class='error'><i class='fas fa-exclamation-circle'></i> ${escapeHtml(userMsg)}</p>`);
+  // Log full details to the console for developers only
+  console.error('Full error (developer):', e);
 });
 
 window.addEventListener('unhandledrejection', e => {
   const reason = (e.reason && (e.reason.message || e.reason)) || String(e.reason);
-  const msg = `Unhandled Promise Rejection: ${reason}`;
-  debugLog(msg);
-  setOutput(`<p class='error'><i class='fas fa-exclamation-circle'></i> ${escapeHtml(msg)}</p>`);
-  console.error('Unhandled rejection', e);
+  const userMsg = `Unhandled error: ${reason}`;
+  debugLog(userMsg);
+  setOutput(`<p class='error'><i class='fas fa-exclamation-circle'></i> ${escapeHtml(userMsg)}</p>`);
+  console.error('Unhandled rejection (developer):', e);
 });
 
 function parseDOB(input) {
@@ -236,7 +245,10 @@ async function viewResult() {
     // Helpers for normalization and comparison
     function normalizeDobString(s) {
       if (!s) return null;
-      s = String(s).trim().replace(/\//g,'-');
+      s = String(s).trim();
+      // Replace slashes with dashes and collapse whitespace
+      s = s.replace(/\//g,'-').replace(/\s+/g,' ').trim();
+
       // YYYY-M-D or YYYY-MM-DD
       let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
       if (m) {
@@ -244,6 +256,7 @@ async function viewResult() {
         const date = new Date(y, mon-1, d);
         if (date.getFullYear()===y && date.getMonth()===mon-1 && date.getDate()===d) return `${y}-${('0'+mon).slice(-2)}-${('0'+d).slice(-2)}`;
       }
+
       // D-M-YYYY or DD-MM-YYYY
       m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
       if (m) {
@@ -252,6 +265,41 @@ async function viewResult() {
         const date = new Date(y, mon-1, d);
         if (date.getFullYear()===y && date.getMonth()===mon-1 && date.getDate()===d) return `${y}-${('0'+mon).slice(-2)}-${('0'+d).slice(-2)}`;
       }
+
+      // Try ISO datetime parse and format
+      const dt = new Date(s);
+      if (!isNaN(dt)) {
+        return `${dt.getFullYear()}-${('0'+(dt.getMonth()+1)).slice(-2)}-${('0'+dt.getDate()).slice(-2)}`;
+      }
+
+      // Try formats with month names, e.g. '7 Jul 2003' or 'July 7, 2003'
+      const monthNames = {
+        jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+        jul: '07', aug: '08', sep: '09', sept: '09', oct: '10', nov: '11', dec: '12',
+        january: '01', february: '02', march: '03', april: '04', may: '05', june: '06',
+        july: '07', august: '08', september: '09', october: '10', november: '11', december: '12'
+      };
+      // e.g. 7 Jul 2003
+      m = s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+      if (m) {
+        const d = Number(m[1]), monName = m[2].toLowerCase(), y = Number(m[3]);
+        const mon = monthNames[monName];
+        if (mon) {
+          const date = new Date(y, Number(mon)-1, d);
+          if (date.getFullYear()===y && date.getMonth()===Number(mon)-1 && date.getDate()===d) return `${y}-${mon}-${('0'+d).slice(-2)}`;
+        }
+      }
+      // e.g. July 7, 2003 or Jul 7, 2003
+      m = s.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s*(\d{4})$/);
+      if (m) {
+        const monName = m[1].toLowerCase(), d = Number(m[2]), y = Number(m[3]);
+        const mon = monthNames[monName];
+        if (mon) {
+          const date = new Date(y, Number(mon)-1, d);
+          if (date.getFullYear()===y && date.getMonth()===Number(mon)-1 && date.getDate()===d) return `${y}-${mon}-${('0'+d).slice(-2)}`;
+        }
+      }
+
       return null;
     }
 
@@ -269,7 +317,7 @@ async function viewResult() {
       return String(e || '').trim() === String(s || '').trim();
     }
 
-    // Build normalized DOB candidates from server value (handle YYYY-MM-DD, ISO datetime, and +/-1 day offsets)
+    // Build normalized DOB candidates from server value (strict — only exact normalized forms)
     let serverDobCandidates = [];
     if (data.DOB) {
       const s = String(data.DOB).trim();
@@ -278,18 +326,8 @@ async function viewResult() {
 
       const dt = new Date(s);
       if (!isNaN(dt)) {
-        // local date (formatDisplayDate uses local date)
+        // Local date normalized as YYYY-MM-DD (no timezone +/- allowances)
         serverDobCandidates.push(formatDisplayDate(dt));
-        // UTC date
-        const utc = `${dt.getUTCFullYear()}-${('0'+(dt.getUTCMonth()+1)).slice(-2)}-${('0'+dt.getUTCDate()).slice(-2)}`;
-        serverDobCandidates.push(utc);
-        // +/- 1 day (UTC) to tolerate timezone shifts
-        const plus1 = new Date(dt);
-        plus1.setUTCDate(plus1.getUTCDate()+1);
-        serverDobCandidates.push(`${plus1.getUTCFullYear()}-${('0'+(plus1.getUTCMonth()+1)).slice(-2)}-${('0'+plus1.getUTCDate()).slice(-2)}`);
-        const minus1 = new Date(dt);
-        minus1.setUTCDate(minus1.getUTCDate()-1);
-        serverDobCandidates.push(`${minus1.getUTCFullYear()}-${('0'+(minus1.getUTCMonth()+1)).slice(-2)}-${('0'+minus1.getUTCDate()).slice(-2)}`);
       }
 
       // Deduplicate
@@ -301,20 +339,29 @@ async function viewResult() {
 
     let dobMatch = false;
     if (parsed.isBS) {
-      // accept exact BS string or any candidate equal to normalized BS
+      // accept exact BS string (if sheet stores BS) or any candidate equal to normalized BS
       dobMatch = String(data.DOB).trim() === String(parsed.normalized).trim() || serverDobCandidates.includes(parsed.normalized);
+
+      // If not matched, attempt to match common BS->AD year offsets (sheet may store AD equivalent)
+
     } else {
       dobMatch = serverDobCandidates.includes(enteredNormalized);
+
+
     }
 
     if (!(rollMatch && semMatch && dobMatch)) {
-      setOutput('<p class="error"><i class="fas fa-exclamation-circle"></i> Record not found. Please verify your Roll No, Semester and DOB.</p>');
+      if (rollMatch && semMatch && !dobMatch) {
+        setOutput('<p class="error"><i class="fas fa-exclamation-circle"></i> DOB mismatch. Please enter DOB exactly as in the records (YYYY-MM-DD).</p>');
+      } else {
+        setOutput('<p class="error"><i class="fas fa-exclamation-circle"></i> Record not found. Please verify your Roll No, Semester and DOB.</p>');
+      }
       console.debug(`Record mismatch (hidden): rollMatch=${rollMatch} semMatch=${semMatch} dobMatch=${dobMatch} entered=${enteredNormalized} serverCandidates=${serverDobCandidates.join(',')}`);
       return;
     }
 
     const subjects = Array.isArray(data.Subjects) ? data.Subjects : [];
-    let totalMarks = 0;
+    let totalObtained = 0;
     let totalAttendance = 0;
     let overallPass = true;
 
@@ -348,7 +395,9 @@ async function viewResult() {
           <thead>
             <tr>
               <th>Subject</th>
-              <th>Marks</th>
+              <th class="center">Full (20)</th>
+              <th class="center">Pass (08)</th>
+              <th class="center">Obtained</th>
               <th class="center">Attendance</th>
               <th class="center">Remarks</th>
             </tr>
@@ -359,10 +408,10 @@ async function viewResult() {
       // Support explicit "abs" or "absent" markers in the marks column to indicate the student missed that subject
       const rawMark = (sub.mark === undefined || sub.mark === null) ? '' : String(sub.mark).trim();
       const isAbsent = /^(abs|absent)$/i.test(rawMark);
-      const mark = isAbsent ? 'Absent' : (Number(sub.mark) || 0);
+      const obtained = isAbsent ? 'Absent' : (Number(sub.mark) || 0);
       const att = Number(sub.attendance) || 0;
       // Absent entries are treated as failing for the overall result
-      const isPass = !isAbsent && Number(mark) >= 8;
+      const isPass = !isAbsent && Number(obtained) >= 8;
       if (!isPass) overallPass = false; // absent or below pass threshold -> overall fail
       const statusHtml = isAbsent
         ? `<span class="status absent"><i class="fas fa-user-times"></i> Absent</span>`
@@ -371,8 +420,8 @@ async function viewResult() {
             : `<span class="status fail"><i class="fas fa-times-circle"></i> Fail</span>`);
       const rowClass = isAbsent ? 'absent fail' : (isPass ? 'pass' : 'fail');
       const subjectCellClass = `subject ${isAbsent ? 'absent-text' : ''}`;
-      html += `<tr class="${rowClass}"><td class="${subjectCellClass}">${sub.name}</td><td class="center">${mark}</td><td class="center">${att}%</td><td class="center">${statusHtml}</td></tr>`;
-      if (!isAbsent) totalMarks += Number(mark);
+      html += `<tr class="${rowClass}"><td class="${subjectCellClass}">${sub.name}</td><td class="center">20</td><td class="center">08</td><td class="center">${obtained}</td><td class="center">${att}%</td><td class="center">${statusHtml}</td></tr>`;
+      if (!isAbsent && !isNaN(Number(obtained))) totalObtained += Number(obtained);
       totalAttendance += att;
     });
 
@@ -382,11 +431,16 @@ async function viewResult() {
       ? `<span class="status pass"><i class="fas fa-check-circle"></i> Pass</span>`
       : `<span class="status fail"><i class="fas fa-times-circle"></i> Fail</span>`);
 
+    const totalFull = subjects.length * 20;
+    const totalPassMarks = subjects.length * 8;
+
     html += `</tbody>
           <tfoot>
             <tr class="summary-row">
               <th>Total</th>
-              <th>${totalMarks}</th>
+              <th></th>
+              <th></th>
+              <th>${totalObtained}</th>
               <th class="center"></th>
               <th class="center">${overallHtml}</th>
             </tr>

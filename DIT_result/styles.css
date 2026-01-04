@@ -55,6 +55,7 @@ body {
   margin: 0 0 4px 0; /* reduce gap below department */
   color: var(--muted);
   font-weight: 600;
+  display: none; /* hide department on-screen; department shown only in print via .result-header */
 }
 
 .brand-text h3 {
@@ -122,7 +123,8 @@ button.neutral {
 }
 
 .result-header {
-  display: flex;
+  /* Hidden on-screen: only show the institutional header when printing */
+  display: none;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
@@ -468,12 +470,19 @@ tr.fail td.subject {
     background: white
   }
 
-  /* Hide header and form controls in print to keep only the result card */
+  /* Hide top page header and form controls in print to keep only the result card */
   .header,
   .form-container,
   button,
   .actions .btn-print {
     display: none
+  }
+
+  /* Show the institutional result header only on print */
+  .result-header {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: center;
   }
 
   .result-card {
