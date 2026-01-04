@@ -5,7 +5,7 @@ A lightweight front-end for viewing internal assessment results for Manmohan Mem
 ---
 
 ## Overview
-
+over
 This project provides a small web UI that queries a remote Google Apps Script / sheet-based API to fetch and display student assessment results. It supports roll number, semester and DOB verification and renders a printable result card.
 
 ## Features
