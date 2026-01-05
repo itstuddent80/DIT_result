@@ -180,7 +180,8 @@ async function viewResult() {
     dobForServer = parsed.normalized; // send BS date as-is to the sheet
     debugLog(`Using BS DOB for server: ${dobForServer}`);
   } else {
-    dobForServer = parsed.date.toISOString().slice(0,10);
+    // Use the normalized YYYY-MM-DD (avoids timezone shifts from toISOString)
+    dobForServer = parsed.normalized;
   }
 
   const requestUrl = `${API_URL}?roll=${encodeURIComponent(roll)}&sem=${encodeURIComponent(sem)}&dob=${encodeURIComponent(dobForServer)}`;
@@ -230,21 +231,33 @@ async function viewResult() {
     }
 
     // Prefer showing raw YYYY-MM-DD from the sheet; otherwise attempt to parse and normalize
-    // Also sanitize values like "2060-07-07 48" by extracting the first YYYY-MM-DD token
+    // Also sanitize values like "2061-7-11 48" by extracting the first YYYY-M-D token and normalizing it
     let dobDisplay = '-';
     if (data.DOB) {
       const s = String(data.DOB).trim();
-      const m = s.match(/(\d{4}-\d{2}-\d{2})/);
+      // Accept YYYY-M-D or YYYY-MM-DD tokens (handles single-digit month/day)
+      let m = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
       if (m) {
-        dobDisplay = m[1];
+        const y = Number(m[1]), mon = Number(m[2]), d = Number(m[3]);
+        dobDisplay = `${y}-${('0'+mon).slice(-2)}-${('0'+d).slice(-2)}`;
       } else {
-        const d = new Date(s);
-        if (!isNaN(d)) dobDisplay = formatDisplayDate(d);
+        // Try normalization heuristics (DD-MM-YYYY etc.)
+        const n = normalizeDobString(s);
+        if (n) {
+          dobDisplay = n;
+        } else {
+          // Last resort: parse Date and use UTC parts to avoid local timezone shifts
+          const dObj = new Date(s);
+          if (!isNaN(dObj)) {
+            dobDisplay = `${dObj.getUTCFullYear()}-${('0'+(dObj.getUTCMonth()+1)).slice(-2)}-${('0'+dObj.getUTCDate()).slice(-2)}`;
+          }
+        }
       }
     }
 
     // Strict verification: normalize values and compare (but don't reveal DB values on mismatch)
-    const enteredNormalized = parsed.isBS ? parsed.normalized : parsed.date.toISOString().slice(0,10);
+    // Use the parsed.normalized value (YYYY-MM-DD) for both AD and BS to avoid timezone shifts
+    const enteredNormalized = parsed.normalized;
 
     // Helpers for normalization and comparison
     function normalizeDobString(s) {
@@ -325,6 +338,14 @@ async function viewResult() {
     let serverDobCandidates = [];
     if (data.DOB) {
       const s = String(data.DOB).trim();
+
+      // Extract an explicit YYYY-M-D token if present (e.g. "2061-7-11 48") and normalize it
+      const isoToken = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (isoToken) {
+        const y = Number(isoToken[1]), mon = Number(isoToken[2]), d = Number(isoToken[3]);
+        serverDobCandidates.push(`${y}-${('0'+mon).slice(-2)}-${('0'+d).slice(-2)}`);
+      }
+
       const n1 = normalizeDobString(s);
       if (n1) serverDobCandidates.push(n1);
 
@@ -343,15 +364,10 @@ async function viewResult() {
 
     let dobMatch = false;
     if (parsed.isBS) {
-      // accept exact BS string (if sheet stores BS) or any candidate equal to normalized BS
+      // Require exact match for BS DOB: either server stored BS string exactly matches, or server candidates include parsed.normalized
       dobMatch = String(data.DOB).trim() === String(parsed.normalized).trim() || serverDobCandidates.includes(parsed.normalized);
-
-      // If not matched, attempt to match common BS->AD year offsets (sheet may store AD equivalent)
-
     } else {
       dobMatch = serverDobCandidates.includes(enteredNormalized);
-
-
     }
 
     if (!(rollMatch && semMatch && dobMatch)) {
@@ -362,6 +378,11 @@ async function viewResult() {
       }
       console.debug(`Record mismatch (hidden): rollMatch=${rollMatch} semMatch=${semMatch} dobMatch=${dobMatch} entered=${enteredNormalized} serverCandidates=${serverDobCandidates.join(',')}`);
       return;
+    }
+
+    // When the record matches, display exactly what the sheet returned for DOB (verbatim)
+    if (dobMatch && data.DOB !== undefined && data.DOB !== null) {
+      dobDisplay = String(data.DOB).trim();
     }
 
     let subjects = Array.isArray(data.Subjects) ? data.Subjects : [];
@@ -399,6 +420,12 @@ async function viewResult() {
           });
         }
       }
+    });
+
+    // Remove any subjects marked 'NA' (case-insensitive) from display entirely
+    subjects = subjects.filter(s => {
+      const rawMark = (s.mark === undefined || s.mark === null) ? '' : String(s.mark).trim();
+      return !/^na$/i.test(rawMark);
     });
 
     let totalObtained = 0;
